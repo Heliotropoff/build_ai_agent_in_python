@@ -27,10 +27,18 @@ When a user asks a question or makes a request, make a function call plan. You c
 - Write or overwrite files
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+
+Do not hesistate to proactively use your tools to answer user's request.
+When asked about code, first explore the directory structure using get_files_info function.
+Get contents of the files with get_file_content function.
+You can use write_file function to populate files with updated data. Function does not append to a file but overwrites it, so if you are modifying only a small part of the file, first generate updated version of an entire file, and write only then.
+You can execute python scripts from files using run_python_file, do not hesitate to use it for debugging or answering users questions.
 """
 
     messages = [
-    types.Content(role="user", parts=[types.Part(text=user_prompt)]),]
+    types.Content(role="user", parts=[types.Part(text=user_prompt)]),
+    ]
+
     available_functions = types.Tool(
     function_declarations=[
         schema_get_files_info,
@@ -39,32 +47,49 @@ All paths you provide should be relative to the working directory. You do not ne
         schema_write_file
     ]
 )
+    for cycle_counter in range(0, 20):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents= messages,
+                config= types.GenerateContentConfig(
+                    tools=[available_functions],
+                    system_instruction=system_prompt)
+                )
+            response_variations = response.candidates
+            if response_variations:
+                for variation in response_variations:
+                    messages.append(variation.content)
 
+            is_verbose_call = "--verbose" in sys.argv
+            if is_verbose_call:
+                print(f"User prompt: {user_prompt}")
+                print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+                print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents= messages,
-        config= types.GenerateContentConfig(
-            tools=[available_functions],
-            system_instruction=system_prompt)
-        )
+            if response.function_calls:
+                for fc in response.function_calls:
+                    try:
+                        function_call_result = call_function(function_call_part=fc, verbose=is_verbose_call)
+                        messages.append(function_call_result)
 
-    is_verbose_call = "--verbose" in sys.argv
+                        result_parts = getattr(function_call_result, "parts", None)
+                        if not result_parts:
+                            raise RuntimeError("Tool call returned no parts")
+                        fr = getattr(result_parts[0], "function_response", None)
+                        if not fr or fr.response is None:
+                            raise RuntimeError("Tool call missing function_response.response")
+                        if is_verbose_call:
+                            print(f"-> {fr.response}")
+                    except:
+                        raise Exception("function failed!")
+            elif response.text:
+                print(response.text)
+                break
 
-    if response.function_calls:
-        for fc in response.function_calls:
-            try:
-                function_call_result = call_function(function_call_part=fc, verbose=is_verbose_call)
-            except:
-                raise Exception("function failed!")
-            print(f"-> {function_call_result.parts[0].function_response.response}")
+        except Exception as e:
+            print(f"Error: {e}")
 
-    else:
-        print(response.text)
-    if is_verbose_call:
-        print(f"User prompt: {user_prompt}")
-        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
 
 
 if __name__ == "__main__":
