@@ -1,5 +1,6 @@
 import os
 import subprocess
+from google.genai import types
 
 def run_python_file(working_directory, file_path, args=[]):
     wd_abs = os.path.abspath(working_directory)
@@ -33,3 +34,24 @@ def run_python_file(working_directory, file_path, args=[]):
         return result_string
     except Exception as e:
         return f"Error: executing Python file: {e}"
+
+
+    # function declaration/schema for the LLM to work with
+schema_run_python = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Receives file_path and list of arguments. File_path is relative to working directory. If file_path points to an existing .py file functions initiates python3 interpreter to execute python file with provided arguments. Function returns either a string with completed process details or an error string",
+    parameters= types.Schema(
+        type=types.Type.OBJECT,
+        properties= {
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path to a file that the function will pass to python3 for execution. No default argument. If file does not exist or does not have .py extension function return an error string."
+            ),
+            "args": types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(type=types.Type.STRING),
+                description="A python list of strings. Default value is an empty list. Can contain zero or more arguments for a python program."
+            )
+        }
+    )
+)

@@ -1,4 +1,5 @@
 import os
+from google.genai import types
 # from functions import config
 MAX_CHARS = 10000
 
@@ -26,3 +27,18 @@ def get_file_content(working_directory, file_path):
             return file_contents_string
     except Exception as e:
         return f"Error: {e}"
+
+    # function declaration/schema for the LLM to work with
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="Read a specified file, truncates if its longer than 1000 characters and returns a string of file contents or an error string if there was an error. Constrained to the working directory.",
+    parameters= types.Schema(
+        type=types.Type.OBJECT,
+        properties= {
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path to a file that the function will read and return as a string. Path is relative to the working directory. Not default argumetn. If file_path is not provided or does not point to an existing file, function will return an error"
+            ),
+        }
+    )
+)
